@@ -197,16 +197,18 @@
     return `M${pts.join('L')}Z`;
   }
 
-  // Arrow triangles inside the hex, near top and bottom interior
+  // Arrow triangles: tip touches hex tip, sides parallel to hex sides.
+  // For a pointy-top hex the sides slope at 60°, so half-width = h * √3.
+  const HEX_R = HR - 2; // matches the radius used in hexPath
+  const ARROW_H = 10;
+  const ARROW_HW = ARROW_H * Math.sqrt(3);
   function arrowUp(cx, cy) {
-    const ty2 = cy - HR * 0.62;
-    const s = 8;
-    return `${cx},${ty2-s} ${cx-s},${ty2+s} ${cx+s},${ty2+s}`;
+    const tip = cy - HEX_R;
+    return `${cx},${tip} ${cx - ARROW_HW},${tip + ARROW_H} ${cx + ARROW_HW},${tip + ARROW_H}`;
   }
   function arrowDown(cx, cy) {
-    const ty2 = cy + HR * 0.62;
-    const s = 8;
-    return `${cx},${ty2+s} ${cx-s},${ty2-s} ${cx+s},${ty2-s}`;
+    const tip = cy + HEX_R;
+    return `${cx},${tip} ${cx - ARROW_HW},${tip - ARROW_H} ${cx + ARROW_HW},${tip - ARROW_H}`;
   }
 
   for (const ty of TY_RANGE) {
