@@ -1,0 +1,297 @@
+<meta charset="UTF-8">
+<style>
+  #tonnetz-wrap { padding: 1rem 0; user-select: none; }
+  #controls { display: flex; align-items: center; gap: 16px; margin-bottom: 1rem; flex-wrap: wrap; }
+  #status { font-size: 13px; color: var(--color-text-secondary); min-height: 20px; margin-bottom: 0.5rem; }
+  svg#lattice { display: block; width: 100%; overflow: visible; }
+  .hex-group { cursor: pointer; }
+  .hex-bg { transition: fill 0.12s; }
+  .hex-name { font-size: 13px; font-weight: 500; text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
+  .oct-btn { cursor: pointer; opacity: 0; transition: opacity 0.12s; pointer-events: none; }
+  .oct-btn.visible { opacity: 1; pointer-events: all; }
+  .oct-btn polygon { transition: fill 0.1s; }
+  .oct-btn:hover polygon { fill: white; }
+  #clear-btn { font-size: 13px; padding: 4px 12px; cursor: pointer; border: 0.5px solid var(--color-border-secondary); border-radius: var(--border-radius-md); background: transparent; color: var(--color-text-primary); }
+  #clear-btn:hover { background: var(--color-background-secondary); }
+  #vol-label { font-size: 13px; color: var(--color-text-secondary); }
+</style>
+
+<div id="tonnetz-wrap">
+  <div id="controls">
+    <button id="clear-btn">Clear all</button>
+    <label id="vol-label">Volume <input type="range" id="vol" min="0" max="100" value="60" step="1" style="width:80px; vertical-align:middle;"> <span id="vol-out">60</span></label>
+  </div>
+  <div id="status">Click hexagons to sound pitches in just intonation.</div>
+  <svg id="lattice" viewBox="0 0 780 420"></svg>
+</div>
+
+<script>
+(function(){
+  const HR = 36;
+  const HW = Math.sqrt(3) * HR;
+
+  function axialToPixel(q, r, ox, oy) {
+    return [ox + HR * Math.sqrt(3) * (q + r/2), oy + HR * 1.5 * r];
+  }
+  function ftToAxial(fx, ty) { return [fx + ty, -ty]; }
+
+  const FIFTH_NAMES_0 = ['F♭','C♭','G♭','D♭','A♭','E♭','B','F','C','G','D','A','E','H','F♯','C♯','G♯','D♯','A♯','E♯','H♯','F𝄪','C𝄪'];
+  const CENTER_FIFTH = 11;
+  function pitchName(fx, ty) {
+    const idx = CENTER_FIFTH + fx + ty * 4;
+    return FIFTH_NAMES_0[idx] || '?';
+  }
+
+  function justFreqBase(fx, ty) {
+    let f = 440 * Math.pow(3/2, fx) * Math.pow(5/4, ty);
+    while (f > 880) f /= 2;
+    while (f < 220) f *= 2;
+    return f;
+  }
+
+  // Octave number in user notation: the octave containing A=440 Hz is 1.
+  // Boundary at just-intonation C (≈ 260.74 Hz = C in octave 1).
+  const C1_FREQ = 440 * Math.pow(2/3, 3) * 2; // ≈ 260.74 Hz
+  function octaveNumber(fx, ty, octOffset) {
+    const f = justFreqBase(fx, ty) * Math.pow(2, octOffset);
+    return Math.floor(Math.log2(f / C1_FREQ)) + 1;
+  }
+
+  const FX_RANGE = [-3,-2,-1,0,1,2,3];
+  const TY_RANGE = [-2,-1,0,1,2];
+  const W = 780, H = 420, OX = 390, OY = 210;
+
+  const rowColors = {'-2':'#3B6D11','-1':'#0F6E56','0':'#185FA5','1':'#533AB7','2':'#3C3489'};
+  const rowTextColors = {'-2':'#C0DD97','-1':'#9FE1CB','0':'#B5D4F4','1':'#CECBF6','2':'#AFA9EC'};
+  const activeColors = {'-2':'#639922','-1':'#1D9E75','0':'#378ADD','1':'#7F77DD','2':'#534AB7'};
+
+  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const masterGain = audioCtx.createGain();
+  masterGain.gain.value = 0.6;
+  masterGain.connect(audioCtx.destination);
+
+  const activeNodes = {};
+  const activeSet = new Set();
+  const octaveOffsets = {}; // key -> integer octave offset (0 default)
+
+  function freqForKey(key) {
+    const [fx, ty] = key.split(',').map(Number);
+    const base = justFreqBase(fx, ty);
+    const oct = octaveOffsets[key] || 0;
+    return base * Math.pow(2, oct);
+  }
+
+  function startNote(key) {
+    if (activeNodes[key]) return;
+    const freq = freqForKey(key);
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    g.gain.setValueAtTime(0, audioCtx.currentTime);
+    g.gain.linearRampToValueAtTime(0.18, audioCtx.currentTime + 0.04);
+    osc.connect(g);
+    g.connect(masterGain);
+    osc.start();
+    activeNodes[key] = { osc, gain: g };
+  }
+
+  function stopNote(key) {
+    const node = activeNodes[key];
+    if (!node) return;
+    node.gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.08);
+    setTimeout(() => { try { node.osc.stop(); } catch(e){} delete activeNodes[key]; }, 120);
+  }
+
+  function restartNote(key) {
+    if (!activeSet.has(key)) return;
+    stopNote(key);
+    setTimeout(() => startNote(key), 130);
+  }
+
+  function updateStatus() {
+    if (activeSet.size === 0) {
+      document.getElementById('status').textContent = 'Click hexagons to sound pitches in just intonation.';
+      return;
+    }
+    const parts = [...activeSet].map(k => {
+      const [fx, ty] = k.split(',').map(Number);
+      const oct = octaveOffsets[k] || 0;
+      return pitchName(fx, ty) + octaveNumber(fx, ty, oct);
+    });
+    document.getElementById('status').textContent = 'Sounding: ' + parts.join(' + ');
+  }
+
+  document.getElementById('vol').addEventListener('input', function() {
+    document.getElementById('vol-out').textContent = this.value;
+    masterGain.gain.value = this.value / 100 * 0.8;
+  });
+
+  const svgEl = document.getElementById('lattice');
+  const groups = {};
+
+  function hexPath(cx, cy, r) {
+    const pts = [];
+    for (let i = 0; i < 6; i++) {
+      const a = Math.PI/180 * (60*i + 30);
+      pts.push(`${cx + r*Math.cos(a)},${cy + r*Math.sin(a)}`);
+    }
+    return `M${pts.join('L')}Z`;
+  }
+
+  // Arrow triangles inside the hex, near top and bottom interior
+  function arrowUp(cx, cy) {
+    const ty2 = cy - HR * 0.62;
+    const s = 8;
+    return `${cx},${ty2-s} ${cx-s},${ty2+s} ${cx+s},${ty2+s}`;
+  }
+  function arrowDown(cx, cy) {
+    const ty2 = cy + HR * 0.62;
+    const s = 8;
+    return `${cx},${ty2+s} ${cx-s},${ty2-s} ${cx+s},${ty2-s}`;
+  }
+
+  for (const ty of TY_RANGE) {
+    for (const fx of FX_RANGE) {
+      const [q, r] = ftToAxial(fx, ty);
+      const [cx, cy] = axialToPixel(q, r, OX, OY);
+      if (cx < -HR || cx > W+HR || cy < -HR || cy > H+HR) continue;
+
+      const key = `${fx},${ty}`;
+      const tyStr = String(ty);
+      const fillInactive = rowColors[tyStr] || '#185FA5';
+      const fillActive = activeColors[tyStr] || '#378ADD';
+      const textCol = rowTextColors[tyStr] || '#B5D4F4';
+
+      const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+      g.setAttribute('class','hex-group');
+
+      // Hex body
+      const path = document.createElementNS('http://www.w3.org/2000/svg','path');
+      path.setAttribute('d', hexPath(cx, cy, HR-2));
+      path.setAttribute('fill', fillInactive);
+      path.setAttribute('stroke', 'var(--color-background-primary)');
+      path.setAttribute('stroke-width', '2');
+      path.setAttribute('class','hex-bg');
+
+      // Pitch label with octave number superscript
+      const txt = document.createElementNS('http://www.w3.org/2000/svg','text');
+      txt.setAttribute('x', cx); txt.setAttribute('y', cy);
+      txt.setAttribute('class','hex-name');
+      txt.setAttribute('fill', textCol);
+      const nameSpan = document.createElementNS('http://www.w3.org/2000/svg','tspan');
+      nameSpan.textContent = pitchName(fx, ty);
+      const octSpan = document.createElementNS('http://www.w3.org/2000/svg','tspan');
+      octSpan.setAttribute('font-size','9');
+      octSpan.setAttribute('dy','-4');
+      octSpan.textContent = String(octaveNumber(fx, ty, 0));
+      txt.appendChild(nameSpan);
+      txt.appendChild(octSpan);
+
+      // Up arrow button
+      const upG = document.createElementNS('http://www.w3.org/2000/svg','g');
+      upG.setAttribute('class','oct-btn');
+      const upPoly = document.createElementNS('http://www.w3.org/2000/svg','polygon');
+      upPoly.setAttribute('points', arrowUp(cx, cy));
+      upPoly.setAttribute('fill', 'rgba(255,255,255,0.75)');
+      upG.appendChild(upPoly);
+
+      // Down arrow button
+      const downG = document.createElementNS('http://www.w3.org/2000/svg','g');
+      downG.setAttribute('class','oct-btn');
+      const downPoly = document.createElementNS('http://www.w3.org/2000/svg','polygon');
+      downPoly.setAttribute('points', arrowDown(cx, cy));
+      downPoly.setAttribute('fill', 'rgba(255,255,255,0.75)');
+      downG.appendChild(downPoly);
+
+      g.appendChild(path);
+      g.appendChild(txt);
+      g.appendChild(upG);
+      g.appendChild(downG);
+      svgEl.appendChild(g);
+
+      groups[key] = { g, path, txt, octSpan, upG, downG, fillInactive, fillActive, textCol, cx, cy };
+
+      // Hex click — toggle note
+      path.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        if (activeSet.has(key)) {
+          activeSet.delete(key);
+          stopNote(key);
+          path.setAttribute('fill', fillInactive);
+          upG.classList.remove('visible');
+          downG.classList.remove('visible');
+        } else {
+          activeSet.add(key);
+          startNote(key);
+          path.setAttribute('fill', fillActive);
+          upG.classList.add('visible');
+          downG.classList.add('visible');
+        }
+        updateStatus();
+      });
+
+      txt.addEventListener('click', (e) => {
+        e.stopPropagation();
+        path.dispatchEvent(new MouseEvent('click', {bubbles:false}));
+      });
+
+      // Show/hide arrows on hover (only if active)
+      g.addEventListener('mouseenter', () => {
+        if (activeSet.has(key)) {
+          upG.classList.add('visible');
+          downG.classList.add('visible');
+        }
+      });
+      g.addEventListener('mouseleave', () => {
+        upG.classList.remove('visible');
+        downG.classList.remove('visible');
+      });
+
+      // Octave up
+      upG.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        octaveOffsets[key] = (octaveOffsets[key] || 0) + 1;
+        updateOctaveLabel(key);
+        restartNote(key);
+        updateStatus();
+      });
+
+      // Octave down
+      downG.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        octaveOffsets[key] = (octaveOffsets[key] || 0) - 1;
+        updateOctaveLabel(key);
+        restartNote(key);
+        updateStatus();
+      });
+    }
+  }
+
+  function updateOctaveLabel(key) {
+    const oct = octaveOffsets[key] || 0;
+    const [fx, ty] = key.split(',').map(Number);
+    groups[key].octSpan.textContent = String(octaveNumber(fx, ty, oct));
+  }
+
+  document.getElementById('clear-btn').addEventListener('click', () => {
+    [...activeSet].forEach(key => {
+      stopNote(key);
+      const gr = groups[key];
+      if (gr) {
+        gr.path.setAttribute('fill', gr.fillInactive);
+        gr.upG.classList.remove('visible');
+        gr.downG.classList.remove('visible');
+        octaveOffsets[key] = 0;
+        updateOctaveLabel(key);
+      }
+    });
+    activeSet.clear();
+    updateStatus();
+  });
+
+})();
+</script>
