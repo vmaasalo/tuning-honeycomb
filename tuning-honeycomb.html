@@ -1,22 +1,48 @@
-<meta charset="UTF-8">
-<style>
-  #tonnetz-wrap { padding: 1rem 0; user-select: none; }
-  #controls { display: flex; align-items: center; gap: 16px; margin-bottom: 1rem; flex-wrap: wrap; }
-  #status { font-size: 13px; color: var(--color-text-secondary); min-height: 20px; margin-bottom: 0.5rem; }
-  svg#lattice { display: block; width: 100%; overflow: visible; }
-  .hex-group { cursor: pointer; }
-  .hex-bg { transition: fill 0.12s; }
-  .hex-name { font-size: 13px; font-weight: 500; text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
-  .oct-btn { cursor: pointer; opacity: 0; transition: opacity 0.12s; pointer-events: none; }
-  .oct-btn.visible { opacity: 1; pointer-events: all; }
-  .oct-btn polygon { transition: fill 0.1s; }
-  .oct-btn:hover polygon { fill: white; }
-  #clear-btn { font-size: 13px; padding: 4px 12px; cursor: pointer; border: 0.5px solid var(--color-border-secondary); border-radius: var(--border-radius-md); background: transparent; color: var(--color-text-primary); }
-  #clear-btn:hover { background: var(--color-background-secondary); }
-  #vol-label { font-size: 13px; color: var(--color-text-secondary); }
-  #tuning-label { font-size: 13px; color: var(--color-text-secondary); }
-  #tuning-sel { font-size: 13px; padding: 2px 4px; border: 0.5px solid var(--color-border-secondary); border-radius: var(--border-radius-md); background: transparent; color: var(--color-text-primary); cursor: pointer; }
-</style>
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tuning Honeycomb</title>
+  <style>
+    :root {
+      --color-background-primary: #ffffff;
+      --color-background-secondary: #f0f0f0;
+      --color-text-primary: #1a1a1a;
+      --color-text-secondary: #666666;
+      --color-border-secondary: #cccccc;
+      --border-radius-md: 6px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 1.5rem 2rem;
+      background: var(--color-background-primary);
+      color: var(--color-text-primary);
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+
+    #tonnetz-wrap { padding: 1rem 0; user-select: none; }
+    #controls { display: flex; align-items: center; gap: 16px; margin-bottom: 1rem; flex-wrap: wrap; }
+    #status { font-size: 13px; color: var(--color-text-secondary); min-height: 20px; margin-bottom: 0.5rem; }
+    svg#lattice { display: block; width: 100%; overflow: visible; }
+    .hex-group { cursor: pointer; }
+    .hex-bg { transition: fill 0.12s; }
+    .hex-name { font-size: 13px; font-weight: 500; text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
+    .oct-btn { cursor: pointer; opacity: 0; transition: opacity 0.12s; pointer-events: none; }
+    .oct-btn.visible { opacity: 1; pointer-events: all; }
+    .oct-btn polygon { transition: fill 0.1s; }
+    .oct-btn:hover polygon { fill: white; }
+    #clear-btn { font-size: 13px; padding: 4px 12px; cursor: pointer; border: 0.5px solid var(--color-border-secondary); border-radius: var(--border-radius-md); background: transparent; color: var(--color-text-primary); }
+    #clear-btn:hover { background: var(--color-background-secondary); }
+    #vol-label { font-size: 13px; color: var(--color-text-secondary); }
+    #tuning-label { font-size: 13px; color: var(--color-text-secondary); }
+    #tuning-sel { font-size: 13px; padding: 2px 4px; border: 0.5px solid var(--color-border-secondary); border-radius: var(--border-radius-md); background: transparent; color: var(--color-text-primary); cursor: pointer; }
+  </style>
+</head>
+<body>
 
 <div id="tonnetz-wrap">
   <div id="controls">
@@ -327,3 +353,6 @@
 
 })();
 </script>
+
+</body>
+</html>
